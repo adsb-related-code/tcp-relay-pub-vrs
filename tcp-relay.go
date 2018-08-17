@@ -1,72 +1,112 @@
 package main
 
-import (
-    "bufio"
-    "fmt"
-    "net"
-    "os"
-)
+ import (
+         "fmt"
+         "net"
+         "bufio"
+         "log"
+         "os"
+         "bytes"
+ )
 
-  func main() {
+func main() {
 
-    clientCount := 0
-    allClients := make(map[net.Conn]int)
-    newConnections := make(chan net.Conn)
-    deadConnections := make(chan net.Conn)
-    messages := make(chan string)
+        TCPoutput := make(chan string)
+        var buffer bytes.Buffer
 
-    server, err := net.Listen("tcp", ":6000")
-    if err != nil {
+        hostName := "pub-vrs.adsbexchange.com"
+        portNum := "32005"
+
+        conn, err := net.Dial("tcp", hostName + ":" + portNum)
+        if err != nil {
+                fmt.Println(err)
+                return
+        }
+
+
+        go func() {
+
+                fmt.Printf("Connection established between %s and localhost.\n", hostName)
+                fmt.Printf("Remote Address : %s \n", conn.RemoteAddr().String())
+                fmt.Printf("Local Address : %s \n", conn.LocalAddr().String())
+
+                for {
+                        status, err := bufio.NewReader(conn).ReadString(']')
+
+                        if err != nil {
+                                log.Fatal(err)
+                        }
+
+                        buffer.WriteString(status)
+                                        
+                       if err != nil {
+                fmt.Println(err)
+                return
+        }
+
+
+        go func() {
+
+                fmt.Printf("Connection established between %s and localhost.\n", hostName)
+                fmt.Printf("Remote Address : %s \n", conn.RemoteAddr().String())
+                fmt.Printf("Local Address : %s \n", conn.LocalAddr().String())
+
+                for {
+                        status, err := bufio.NewReader(conn).ReadString(']')
+
+                        if err != nil {
+                                log.Fatal(err)
+                        }
+
+                        buffer.WriteString(status)
+                        buffer.WriteString("}")
+                        TCPoutput <- buffer.String()
+                        buffer.Reset()
+                }
+        }()
+
+        server, err := net.Listen("tcp", ":6000")
+        if err != nil {
             fmt.Println(err)
             os.Exit(1)
-    }
-
-    go func() {
-            for {
-                    conn, err := server.Accept()
-                    if err != nil {
-                            fmt.Println(err)
-                            os.Exit(1)
-                    }
-                    newConnections <- conn
-            }
-    }()
-
-    for {
-
-            select {
-            case conn := <-newConnections:
-
-                    allClients[conn] = clientCount
-                    clientCount += 1
-
-                    go func(conn net.Conn, clientId int) {
-                            scanner := bufio.NewScanner(conn)
-                            for scanner.Scan() {
-                                    if err := scanner.Err(); err != nil {
-                                      break
-                                    }
-                                    messages <- scanner.Text()
-
-                            }
-                            deadConnections <- conn
-
-
-                    }(conn, allClients[conn])
-
-            case message := <-messages:
-
-                    for conn, _ := range allClients {
-
-                            go func(conn net.Conn, message string) {
-                                    _, err := conn.Write([]byte(message))
-                                    if err != nil {
-                                            deadConnections <- conn
-                                    }
-                            }(conn, message)
-                    }
-            case conn := <-deadConnections:
-                    delete(allClients, conn)
-            }
         }
-  }
+
+        for {
+                conn, err := server.Accept()
+                if err != nil {
+                           fmt.Println(err)
+                           os.Exit(1)
+                }
+                for {
+                         msg := <-TCPoutput
+                                            buffer.WriteString(status)
+                        buffer.WriteString("}")
+                        TCPoutput <- buffer.String()
+                        buffer.Reset()
+                }
+        }()
+
+        server, err := net.Listen("tcp", ":6000")
+        if err != nil {
+            fmt.Println(err)
+            os.Exit(1)
+        }
+
+        for {
+                conn, err := server.Accept()
+                if err != nil {
+                           fmt.Println(err)
+                           os.Exit(1)
+                }
+                for {
+                         msg := <-TCPoutput
+                         fmt.Fprintf(conn,msg)
+                }
+            }
+
+}
+
+
+
+
+
