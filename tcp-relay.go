@@ -9,11 +9,30 @@ package main
          "bytes"
  )
 
+var TCPoutput = make(chan string)
+var buffer bytes.Buffer
+
+func handleConnection(conn net.Conn) {
+
+        fmt.Println("Handling new connection...")
+
+        // Close connection when this function ends
+
+        defer func() {
+                fmt.Println("Closing connection...")
+                conn.Close()
+        }()
+
+        for {
+            msg := <-TCPoutput
+            fmt.Fprintf(conn,msg)
+        }
+}
+
+
 func main() {
 
-        TCPoutput := make(chan string)
-        var buffer bytes.Buffer
-
+        //public ASBX feed
         hostName := "pub-vrs.adsbexchange.com"
         portNum := "32005"
 
@@ -38,29 +57,29 @@ func main() {
                         }
 
                         buffer.WriteString(status)
-                                        
-                       if err != nil {
-                fmt.Println(err)
-                return
-        }
+                        buffer.WriteString("}")
+                        TCPoutput <- buffer.String()
+                        buffer.Reset()
+                }
+
+        }()
 
         server, err := net.Listen("tcp", ":6000")
         if err != nil {
             fmt.Println(err)
-            os.Exit(1)
         }
 
         for {
+                
                 conn, err := server.Accept()
                 if err != nil {
-                           fmt.Println(err)
-                           os.Exit(1)
+                        fmt.Println(err)
+                        break
                 }
-                for {
-                         msg := <-TCPoutput
-                         fmt.Fprintf(conn,msg)
-                }
-            }
+
+                go handleConnection(conn)
+  
+          }
 
 }
 
