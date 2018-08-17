@@ -44,48 +44,6 @@ func main() {
                 return
         }
 
-
-        go func() {
-
-                fmt.Printf("Connection established between %s and localhost.\n", hostName)
-                fmt.Printf("Remote Address : %s \n", conn.RemoteAddr().String())
-                fmt.Printf("Local Address : %s \n", conn.LocalAddr().String())
-
-                for {
-                        status, err := bufio.NewReader(conn).ReadString(']')
-
-                        if err != nil {
-                                log.Fatal(err)
-                        }
-
-                        buffer.WriteString(status)
-                        buffer.WriteString("}")
-                        TCPoutput <- buffer.String()
-                        buffer.Reset()
-                }
-        }()
-
-        server, err := net.Listen("tcp", ":6000")
-        if err != nil {
-            fmt.Println(err)
-            os.Exit(1)
-        }
-
-        for {
-                conn, err := server.Accept()
-                if err != nil {
-                           fmt.Println(err)
-                           os.Exit(1)
-                }
-                for {
-                         msg := <-TCPoutput
-                                            buffer.WriteString(status)
-                        buffer.WriteString("}")
-                        TCPoutput <- buffer.String()
-                        buffer.Reset()
-                }
-        }()
-
         server, err := net.Listen("tcp", ":6000")
         if err != nil {
             fmt.Println(err)
