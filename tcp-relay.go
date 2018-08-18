@@ -14,14 +14,14 @@ var buffer bytes.Buffer
 var clientCount = 0
 var allClients = make(map[net.Conn]int)
 
-func sendDataToClients(msg string){
+func sendDataToClients(){
 
         fmt.Println("Sending data to all clients ...",clientCount)
 
                 for conn, _ := range allClients {
-                                fmt.Println("Sending single client ...")
-                                _, err := conn.Write([]byte(msg))
-                                if err != nil {
+                      fmt.Println("Sending single client ...")
+                      _, err := conn.Write([]byte(buffer.String()))
+                      if err != nil {
                                                 fmt.Printf("Client %d disconnected", allClients[conn])
                                                 delete(allClients,conn)
                                                 clientCount -= 1
@@ -72,7 +72,7 @@ func main() {
                         buffer.WriteString(status)
                         buffer.WriteString("}")
                         
-                        go sendDataToClients(status)
+                        go sendDataToClients()
 
                 }
 
