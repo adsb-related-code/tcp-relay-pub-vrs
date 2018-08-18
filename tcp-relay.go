@@ -59,7 +59,7 @@ func main() {
                         buffer.WriteString(status)
                         buffer.WriteString("}")
                         TCPoutput <- buffer.String()
-                        buffer.Reset()
+                        //buffer.Reset()
                 }
 
         }()
