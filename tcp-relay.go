@@ -11,22 +11,31 @@ package main
 
 var TCPoutput = make(chan string)
 var buffer bytes.Buffer
+var clientCount = 0
+var allClients = make(map[net.Conn]int)
+
+func sendDataToClients(msg string){
+
+        fmt.Println("Sending data to all clients ...",clientCount)
+
+                for conn, _ := range allClients {
+                                fmt.Println("Sending single client ...")
+                                _, err := conn.Write([]byte(msg))
+                                if err != nil {
+                                                fmt.Printf("Client %d disconnected", allClients[conn])
+                                                delete(allClients,conn)
+                                                clientCount -= 1
+                                }
+                                fmt.Println("the message ...")
+                }
+}
 
 func handleConnection(conn net.Conn) {
 
-        fmt.Println("Handling new connection...")
+        clientCount += 1
+        allClients[conn] = clientCount
+        fmt.Println("Handling new connection... ",clientCount)
 
-        // Close connection when this function ends
-
-        defer func() {
-                fmt.Println("Closing connection...")
-                conn.Close()
-        }()
-
-        for {
-            msg := <-TCPoutput
-            fmt.Fprintf(conn,msg)
-        }
 }
 
 
@@ -58,8 +67,9 @@ func main() {
 
                         buffer.WriteString(status)
                         buffer.WriteString("}")
-                        TCPoutput <- buffer.String()
-                        //buffer.Reset()
+                        
+                        go sendDataToClients(status)
+
                 }
 
         }()
