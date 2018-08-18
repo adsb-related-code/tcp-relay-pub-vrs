@@ -5,8 +5,8 @@ package main
          "net"
          "bufio"
          "log"
- //        "os"
-         "bytes"
+         "os"
+  //       "bytes"
  )
 
 var TCPoutput = make(chan string)
@@ -14,13 +14,15 @@ var buffer bytes.Buffer
 var clientCount = 0
 var allClients = make(map[net.Conn]int)
 
-func sendDataToClients(){
+func sendDataToClients(msg string){
 
         fmt.Println("Sending data to all clients ...",clientCount)
 
                 for conn, _ := range allClients {
                       fmt.Println("Sending single client ...")
-                      _, err := conn.Write([]byte(buffer.String()))
+                      //_, err := conn.Write([]byte(buffer.String()))
+                      //back to just msg string since buffer had memory leak
+                      _, err := fmt.Fprintf(conn,msg)
                       if err != nil {
                                                 fmt.Printf("Client %d disconnected", allClients[conn])
                                                 delete(allClients,conn)
@@ -31,7 +33,7 @@ func sendDataToClients(){
       //clean up memory usage
       //really should pull this out so I'm not writing to buffer and clearing it at the same time
       //anyone help with this?
-      buffer.Reset()
+      //buffer.Reset()
 }
 
 func handleConnection(conn net.Conn) {
@@ -54,9 +56,18 @@ func main() {
                 fmt.Println(err)
                 return
         }
-
-
-        go func() {
+ 
+       /*
+       //going to modify for multiple listeners?!
+       //tcp server can push to this server instead of this server pulling
+       
+       conn, err := net.Listen("tcp", ":32001")
+        if err != nil {
+            fmt.Println(err)
+            os.Exit(1)
+        }
+       */
+       go func() {
 
                 fmt.Printf("Connection established between %s and localhost.\n", hostName)
                 fmt.Printf("Remote Address : %s \n", conn.RemoteAddr().String())
@@ -69,10 +80,10 @@ func main() {
                                 log.Fatal(err)
                         }
 
-                        buffer.WriteString(status)
-                        buffer.WriteString("}")
+                      / //buffer.WriteString(status)
+                        //buffer.WriteString("}")
                         
-                        go sendDataToClients()
+                        go sendDataToClients(status)
 
                 }
 
@@ -81,6 +92,8 @@ func main() {
         server, err := net.Listen("tcp", ":6000")
         if err != nil {
             fmt.Println(err)
+            //probably don't want to exit but why not
+            os.Exit(1)
         }
 
         for {
