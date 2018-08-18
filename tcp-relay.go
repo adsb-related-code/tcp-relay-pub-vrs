@@ -28,6 +28,10 @@ func sendDataToClients(msg string){
                                 }
                                 fmt.Println("the message ...")
                 }
+      //clean up memory usage
+      //really should pull this out so I'm not writing to buffer and clearing it at the same time
+      //anyone help with this?
+      buffer.Reset()
 }
 
 func handleConnection(conn net.Conn) {
