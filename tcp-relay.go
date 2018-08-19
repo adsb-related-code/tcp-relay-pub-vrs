@@ -21,25 +21,18 @@ func sendDataToClients(msg string){
         //ReadString 
         msg += "}"
  
-        //fmt.Println("Sending data to all clients ...",clientCount)
-         go func(){
+        go func(){
                 for conn, _ := range allClients {
 
-                        
-                                //fmt.Println("Sending single client ...")
-                                //_, err := conn.Write(msg)
-                                //buffer bytes.Buffer
-                                //buffer.WriteString(msg)
-                                //buffer.WriteString("}")
+                              //_, err := fmt.Fprintf(conn,"%s",msg)
+                                _, err := conn.Write([]byte(msg))
 
-                                _, err := fmt.Fprintf(conn,"%s",msg)
 
                                 if err != nil {
-                                                //fmt.Printf("Client %d disconnected", allClients[conn])
                                                 delete(allClients,conn)
                                                 clientCount -= 1
                                 }
-                                //fmt.Println("the message ...")
+                                
                 }
          }()
 
@@ -71,8 +64,9 @@ func main() {
         }
  
        /*
-       //going to modify for multiple listeners?!
-       //tcp server can push to this server instead of this server pulling
+       // going to modify for multiple listeners?!
+       // tcp server can push to this server instead of this server pulling
+       // for future design
        
        conn, err := net.Listen("tcp", ":32001")
         if err != nil {
@@ -85,6 +79,9 @@ func main() {
                 fmt.Printf("Connection established between %s and localhost.\n", hostName)
                 fmt.Printf("Remote Address : %s \n", conn.RemoteAddr().String())
                 fmt.Printf("Local Address : %s \n", conn.LocalAddr().String())
+        
+                // Add more statistics periodically printed out
+                //  go func() printing to terminal or outputin json on a port
 
                 for {
                         status, err := bufio.NewReader(conn).ReadString(']')
@@ -93,10 +90,7 @@ func main() {
                                 log.Fatal(err)
                         }
 
-                      / //buffer.WriteString(status)
-                        //buffer.WriteString("}")
-                        
-                        go sendDataToClients(status)
+                      go sendDataToClients(status)
 
                 }
 
@@ -113,8 +107,7 @@ func main() {
                 conn, err := server.Accept()
                 if err != nil {
                         fmt.Println(err)
-                        break
-                }
+                        }
 
                 go handleConnection(conn)
   
