@@ -67,7 +67,7 @@ func main() {
         conn, err := net.Dial("tcp", hostName + ":" + portNum)
         if err != nil {
                 fmt.Println(err)
-                return
+                os.Exit(1)
         }
  
        /*
@@ -105,7 +105,6 @@ func main() {
         server, err := net.Listen("tcp", ":6000")
         if err != nil {
             fmt.Println(err)
-            //probably don't want to exit but why not
             os.Exit(1)
         }
 
