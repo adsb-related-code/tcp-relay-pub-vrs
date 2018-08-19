@@ -16,20 +16,33 @@ var allClients = make(map[net.Conn]int)
 
 func sendDataToClients(msg string){
 
-        fmt.Println("Sending data to all clients ...",clientCount)
-
+        //specific to ASDBx
+        //json object ]
+        //ReadString 
+        msg += "}"
+ 
+        //fmt.Println("Sending data to all clients ...",clientCount)
+         go func(){
                 for conn, _ := range allClients {
-                      fmt.Println("Sending single client ...")
-                      //_, err := conn.Write([]byte(buffer.String()))
-                      //back to just msg string since buffer had memory leak
-                      _, err := fmt.Fprintf(conn,msg)
-                      if err != nil {
-                                                fmt.Printf("Client %d disconnected", allClients[conn])
+
+                        
+                                //fmt.Println("Sending single client ...")
+                                //_, err := conn.Write(msg)
+                                //buffer bytes.Buffer
+                                //buffer.WriteString(msg)
+                                //buffer.WriteString("}")
+
+                                _, err := fmt.Fprintf(conn,"%s",msg)
+
+                                if err != nil {
+                                                //fmt.Printf("Client %d disconnected", allClients[conn])
                                                 delete(allClients,conn)
                                                 clientCount -= 1
                                 }
-                                fmt.Println("the message ...")
+                                //fmt.Println("the message ...")
                 }
+         }()
+
       //clean up memory usage
       //really should pull this out so I'm not writing to buffer and clearing it at the same time
       //anyone help with this?
@@ -40,7 +53,7 @@ func handleConnection(conn net.Conn) {
 
         clientCount += 1
         allClients[conn] = clientCount
-        fmt.Println("Handling new connection... ",clientCount)
+        //fmt.Println("Handling new connection... ",clientCount)
 
 }
 
