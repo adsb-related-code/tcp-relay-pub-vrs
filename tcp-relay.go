@@ -50,8 +50,8 @@ func addtoConnMap(incoming net.Conn) {
 
 func main() {
 
-        hostName := "172.19.235.12"
-	portNum := "32001"
+        hostName := "x.x.x.x"
+	portNum := "xxxx"
 
 	conn, err := net.Dial("tcp", hostName + ":" + portNum)
 	// exit on TCP connect failure
@@ -62,7 +62,7 @@ func main() {
         }
 	
 	// print error on listener error
-	server, err := net.Listen("tcp", ":6000")
+	server, err := net.Listen("tcp", ":xxxx")
     	if err != nil {
        	 	fmt.Println("Listener ERR: %s",err)
 		os.Exit(1)
