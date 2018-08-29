@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/adsbexchange/tcp-relay-pub-vrs/stream"
@@ -12,7 +13,7 @@ import (
 )
 
 var clientCount int64
-var allClients = make(map[int64]net.Conn)
+var allClients = make(map[int64]chan []byte)
 
 func runtimeStats(portNum string) {
 	var m runtime.MemStats
@@ -69,20 +70,24 @@ func main() {
 	go dataSender(msgChan)
 	go runtimeStats(portNum)
 
-	var totalCount int64
+	var clientNum int64
+	var clientWg = new(sync.WaitGroup)
 	for {
-		incoming, err := server.Accept()
+		var clientConn net.Conn
+		clientConn, err = server.Accept()
 		if err != nil {
 			continue
 		}
+		var clientChan = make(chan []byte, 2)
 		clientCount++
-		totalCount++
-		allClients[totalCount] = incoming
+		clientNum++
+		allClients[clientNum] = clientChan
+		clientWg.Add(1)
+		go clientWriter(clientNum, clientConn, clientChan, clientWg)
 	}
 }
 
 func dataSender(msgChan chan []byte) {
-	var err error
 	var msg []byte
 	var ok bool
 
@@ -90,16 +95,41 @@ func dataSender(msgChan chan []byte) {
 		select {
 		case msg, ok = <-msgChan:
 			if !ok {
+				for _, ch := range allClients {
+					close(ch)
+				}
 				return
 			}
 		}
-		for k, conn := range allClients {
-			_, err = conn.Write(msg)
-			if err != nil {
-				conn.Close()
-				delete(allClients, k)
-				clientCount--
+		for _, ch := range allClients {
+			select {
+			case ch <- msg:
+			default:
 			}
 		}
 	}
+}
+
+func clientWriter(num int64, conn net.Conn, ch chan []byte, wg *sync.WaitGroup) {
+	var err error
+	var msg []byte
+	var ok bool
+
+Loop:
+	for {
+		select {
+		case msg, ok = <-ch:
+			if !ok {
+				break Loop
+			}
+			_, err = conn.Write(msg)
+			if err != nil {
+				break Loop
+			}
+		}
+	}
+	conn.Close()
+	delete(allClients, num)
+	clientCount--
+	wg.Done()
 }
