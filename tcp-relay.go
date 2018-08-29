@@ -1,19 +1,18 @@
 package main
 
 import (
+	"bufio"
+	"flag"
 	"fmt"
+	"log"
 	"net"
 	"os"
-	"io"
-	"bufio"
 	"time"
-	//	"bytes"
-	//"runtime/debug"
-	//	"strings"
-	"github.com/dustin/go-humanize"
+
 	"runtime"
 	"sync"
-	
+
+	"github.com/dustin/go-humanize"
 )
 
 var clientCount = 0
@@ -22,144 +21,110 @@ var connLock sync.RWMutex
 
 func runtimeStats(portNum string) {
 	var m runtime.MemStats
+	time.Sleep(3 * time.Second)
 	for {
-		time.Sleep(5 * time.Second)
-		fmt.Println(" =========  ==========  ==========")
-		fmt.Println(portNum," -  # goroutines: ", runtime.NumGoroutine(), " Client Connections: ", clientCount)
 		runtime.ReadMemStats(&m)
-		fmt.Println("Memory Acquired: ", humanize.Bytes(m.Sys))
-		//fmt.Println("Memory Alloc: ", humanize.Bytes(m.Alloc))
-		fmt.Println("GC: ", m.EnableGC)
-		//fmt.Println("# GC: ", m.NumGC)
-		fmt.Println("Last GC: ", m.LastGC)
-		fmt.Println("Next GC: ", humanize.Bytes(m.NextGC), "Heap Alloc: ",  humanize.Bytes(m.HeapAlloc))
-		//fmt.Printf("%d, %d, %d, %d\n", m.HeapSys, m.HeapAlloc, m.HeapIdle, m.HeapReleased)
-		fmt.Println(" =========  ==========  ==========")
-		//runtime.GC()
+		fmt.Println()
+		fmt.Printf("Goroutines:\t%7d\t\t Clients:\t%7d\n", runtime.NumGoroutine(), clientCount)
+		fmt.Printf("Last GC:\t%7d\t\t Next GC:\t%7s\n", m.LastGC, humanize.Bytes(m.NextGC))
+		fmt.Printf("Memory Acq:\t%7s\t\t Heap Alloc:\t%7s\n", humanize.Bytes(m.HeapSys), humanize.Bytes(m.HeapAlloc))
+		fmt.Printf("GC Pool Mem:\t%7s\t\t Heap InUse:\t%7s\n", humanize.Bytes(m.HeapIdle-m.HeapReleased), humanize.Bytes(m.HeapInuse))
+		fmt.Println()
+		time.Sleep(5 * time.Second)
 	}
-	return
-
 }
 
-func sendDataToClients(msg string){
+func sendDataToClient(client net.Conn, msg string) {
+	n, err := client.Write([]byte(msg))
+	if err != nil {
+		log.Printf("Client %s disconnected \n", client.RemoteAddr().String())
+		removeFromConnMap(client)
+	} else if n != len(msg) {
+		log.Printf("Client connection did not send expected number of bytes, %d != %d", n, len(msg))
+	}
+}
 
+func sendDataToClients(msg string) {
 	// VRS ADSBx specific since no newline is printed between data bursts
 	// we use ] and must add } closure
 	msg += "}"
 
-	var wg sync.WaitGroup
-
-	for incoming, _ := range allClients {
-		wg.Add(1)
-		//go func() {		
-			_, err := incoming.Write([]byte(msg))
-			if err != nil {
-			fmt.Printf("Client %d (%s) disconnected \n", allClients[incoming], incoming.RemoteAddr().String())
-				go removefromConnMap(incoming)
-			}
-			fmt.Printf(".")
-		defer wg.Done()
-		//}()
-		
+	connLock.RLock()
+	for client := range allClients {
+		go sendDataToClient(client, msg)
 	}
-	wg.Wait()
-	//fmt.Println(" ========= CALLING FREE OS MEMORY ========== ")
-	//debug.FreeOSMemory()
-	//}()
-} //end sendDataToClients
+	connLock.RUnlock()
+}
 
-func removefromConnMap(incoming net.Conn) {
-
+func removeFromConnMap(client net.Conn) {
 	connLock.Lock()
-	defer connLock.Unlock()	
-	delete(allClients, incoming)
+	log.Println("removing client", clientCount)
+	delete(allClients, client)
 	clientCount = len(allClients)
-	//fmt.Println("disconnected connection ...")
+	connLock.Unlock()
+}
 
-} //removefromConnMap
-
-func addtoConnMap(incoming net.Conn) {
+func addToConnMap(client net.Conn) {
 	connLock.Lock()
-	defer connLock.Unlock()	
-	allClients[incoming] = clientCount
+	log.Println("adding client", clientCount+1)
+	allClients[client] = 0
 	clientCount = len(allClients)
-	//fmt.Println("incoming connection ...")
-} //addtoConnMap
+	connLock.Unlock()
+}
 
-func handleTCPincoming(hostName string, portNum string) {
-
+func handleTCPIncoming(hostName string, portNum string) {
 	conn, err := net.Dial("tcp", hostName+":"+portNum)
 	// exit on TCP connect failure
 	if err != nil {
-		conn.Close()
-		os.Exit(1)
+		log.Fatal(err)
 	}
-	//	defer conn.Close()
+	defer conn.Close()
 
-	//fmt.Printf("Remote Address : %s \n", conn.RemoteAddr().String())
-	//fmt.Printf("Local Address : %s \n", conn.LocalAddr().String())
-
-	//go runtimeStats()
 	// constantly read JSON from PUB-VRS and write to the buffer
 	data := bufio.NewReader(conn)
 	for {
 		scan, err := data.ReadString(']')
-		if len(scan) == 0 && err != nil {
-            		if err == io.EOF {
-                		break
-            			}
-            		os.Exit(1)
-       		}
-		
-		go sendDataToClients(scan)
-		
-	}
+		if len(scan) == 0 || err != nil {
+			break
+		}
 
-	fmt.Println("THIS SHOULD NEVER PRINT!")
-	
+		go sendDataToClients(scan)
+	}
 }
 
-func main() {
-	hostName := ""
-	portNum := ""
-	outportNum := ""
-
-	
-
-	if len(os.Args) > 2 {
-		hostName = os.Args[1]
-		portNum = os.Args[2]
-		outportNum = os.Args[3]
-	} else {
-		//fmt.Println("usage: dial-tcp <input> <port> <output>")
-		os.Exit(1)
-	}
-
-	//connect to TCP data for sending to clients
-	go handleTCPincoming(hostName, portNum)
-	//go runtimeStats(portNum)
-
+func handleTCPOutgoing(outportNum string) {
 	// print error on listener error
 	server, err := net.Listen("tcp", ":"+outportNum)
 	if err != nil {
-		//fmt.Println("Listener ERR: %s", err)
-		os.Exit(1)
+		log.Fatalf("Listener err: %s\n", err)
 	}
 
 	for {
 		incoming, err := server.Accept()
 		// print error and continue waiting
 		if err != nil {
-			//fmt.Println(err)
-			break
+			log.Println(err)
 		} else {
-			//fmt.Println("adding Client ...")
-			//go addtoConnMap(incoming)
-			go addtoConnMap(incoming)
+			go addToConnMap(incoming)
 		}
 
 	}
+}
 
-	
+func main() {
+	hostName := flag.String("hostname", "", "what host to connect to")
+	portNum := flag.String("port", "", "which port to connect with")
+	outportNum := flag.String("listenport", "", "which port to listen on")
+	flag.Parse()
 
+	if *hostName == "" || *portNum == "" || *outportNum == "" {
+		fmt.Println("usage: dial-tcp -hostname <input> -port <port> -listenport <output>")
+		os.Exit(1)
+	}
+
+	go runtimeStats(*portNum)
+	go handleTCPOutgoing(*outportNum)
+
+	// if this function returns, the main thread will exit, which exits the entire program
+	handleTCPIncoming(*hostName, *portNum)
 }
