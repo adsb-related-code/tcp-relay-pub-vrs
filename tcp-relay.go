@@ -13,10 +13,12 @@ import (
 	"github.com/dustin/go-humanize"
 	"runtime"
 	"sync"
+	
 )
 
 var clientCount = 0
 var allClients = make(map[net.Conn]int)
+var connLock sync.RWMutex
 
 func runtimeStats(portNum string) {
 	var m runtime.MemStats
@@ -39,7 +41,7 @@ func runtimeStats(portNum string) {
 
 }
 
-func sendDataToClients(msg string) int {
+func sendDataToClients(msg string){
 
 	// VRS ADSBx specific since no newline is printed between data bursts
 	// we use ] and must add } closure
@@ -49,16 +51,20 @@ func sendDataToClients(msg string) int {
 
 	//
 	msg += "}"
+		
 	
 	for incoming, _ := range allClients {				
 		go func() {
 			defer wg.Done()
+
+			connLock.RLock()
+			defer connLock.RUnlock()
+			
 			_, err := incoming.Write([]byte(msg))
 			if err != nil {
 				//fmt.Printf("Client %d (%s) disconnected \n", allClients[incoming], incoming.RemoteAddr().String())
-				delete(allClients, incoming)
-				clientCount -= 1
 				
+				go removefromConnMap(incoming)
 			}
 		
 			//_, err := io.WriteString(incoming, msg)
@@ -70,16 +76,24 @@ func sendDataToClients(msg string) int {
 	//fmt.Println(" ========= CALLING FREE OS MEMORY ========== ")
 	//debug.FreeOSMemory()
 	//}()
-	return 1
 } //end sendDataToClients
 
+func removefromConnMap(incoming net.Conn) {
+
+	connLock.Lock()
+	defer connLock.Unlock()	
+	delete(allClients, incoming)
+	clientCount -= 1
+	
+} //removefromConnMap
+
 func addtoConnMap(incoming net.Conn) {
-	//fmt.Println(time.Now().Format(time.RFC850))
-	clientCount += 1
+
+	connLock.Lock()
+	defer connLock.Unlock()	
 	allClients[incoming] = clientCount
-	//fmt.Println("Handling new connection... ", clientCount, " from ", incoming.RemoteAddr().String())
-	//fmt.Println("Client Map: ", allClients)
-	return
+	clientCount += 1
+
 } //addtoConnMap
 
 func handleTCPincoming(hostName string, portNum string) {
@@ -151,8 +165,7 @@ func main() {
 		} else {
 			//fmt.Println("adding Client ...")
 			//go addtoConnMap(incoming)
-			clientCount += 1
-			allClients[incoming] = clientCount
+			go addtoConnMap(incoming)
 		}
 
 	}
