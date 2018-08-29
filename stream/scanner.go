@@ -83,8 +83,8 @@ func (s *scanner) splitStream(data []byte, eof bool) (a int, b []byte, c error) 
 		if !eof {
 			return 0, nil, nil
 		}
-		// EOF, return error
-		return 0, nil, errors.New("premature EOF")
+		// True EOF
+		return 0, nil, io.EOF
 	}
 	// begin found
 	s.inMsg = true

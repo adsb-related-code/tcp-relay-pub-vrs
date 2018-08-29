@@ -23,6 +23,7 @@
 package stream
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -53,6 +54,10 @@ type StreamClient struct {
 func (sc *StreamClient) Connect(server, port string) error {
 	var err error
 
+	if sc.closed {
+		return errors.New("cannot connect closed client")
+	}
+
 	sc.addr = net.JoinHostPort(server, port)
 	sc.conn, err = net.DialTimeout(
 		"tcp",
@@ -69,10 +74,18 @@ func (sc *StreamClient) Connect(server, port string) error {
 // Close closes the network connection. An attempt is made to signal the
 // scanner to stop scanning at the end of the current message.
 func (sc *StreamClient) Close() {
+	if sc.closed {
+		return
+	}
+
 	sc.closed = true
-	sc.scanner.stop = true
-	time.Sleep(500 * time.Millisecond)
-	sc.conn.Close()
+	if sc.scanner != nil {
+		sc.scanner.stop = true
+	}
+	if sc.conn != nil {
+		time.Sleep(500 * time.Millisecond)
+		sc.conn.Close()
+	}
 }
 
 // Scan initates decoding of the stream and returns a message channel.
@@ -80,6 +93,11 @@ func (sc *StreamClient) Close() {
 // message indicates an error, receivers should check StreamClient.Err
 // for the last error returned by the underlying stream scanner.
 func (sc *StreamClient) Scan(size int, discard bool) chan []byte {
+	if sc.closed {
+		sc.Err = errors.New("cannot scan closed client")
+		return nil
+	}
+
 	sc.scanner = newStreamScanner(sc.conn, 5*1024*1024)
 	sc.msgChan = make(chan []byte, size)
 	go sc.scanAndWatch(discard)
@@ -91,7 +109,16 @@ func (sc *StreamClient) Scan(size int, discard bool) chan []byte {
 func (sc *StreamClient) scanAndWatch(discard bool) {
 	var err error
 
-Exit:
+	if sc.closed {
+		return
+	}
+
+	defer func() {
+		sc.closed = true
+		sc.Err = sc.scanner.Err()
+		close(sc.msgChan)
+	}()
+
 	for {
 		for sc.scanner.Scan() { // Scan() returns false on error
 			if sc.scanner.Bytes() == nil {
@@ -126,7 +153,7 @@ Exit:
 				if err != nil {
 					if sc.reconCount >= sc.ReconnectMax {
 						fmt.Println("failed to reconnect")
-						break Exit
+						return
 					}
 					sc.reconCount++
 					continue
@@ -140,6 +167,4 @@ Exit:
 		}
 		break
 	}
-	sc.Err = sc.scanner.Err()
-	close(sc.msgChan)
 }
