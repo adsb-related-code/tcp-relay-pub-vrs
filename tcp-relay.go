@@ -47,11 +47,11 @@ func sendDataToClients(msg string){
 	// we use ] and must add } closure
 	msg += "}"
 
-	//var wg sync.WaitGroup
+	var wg sync.WaitGroup
 
 	for incoming, _ := range allClients {
 
-		//wg.Add(1)
+		wg.Add(1)
 
 		go func() {		
 			_, err := incoming.Write([]byte(msg))
@@ -60,11 +60,11 @@ func sendDataToClients(msg string){
 				go removefromConnMap(incoming)
 			}
 			fmt.Printf(".")
-			//defer wg.Done()
+			defer wg.Done()
 		}()
 		
 	}
-	//wg.Wait()
+	wg.Wait()
 	//fmt.Println(" ========= CALLING FREE OS MEMORY ========== ")
 	//debug.FreeOSMemory()
 	//}()
@@ -72,8 +72,8 @@ func sendDataToClients(msg string){
 
 func removefromConnMap(incoming net.Conn) {
 
-	//onnLock.Lock()
-	//defer connLock.Unlock()	
+	connLock.Lock()
+	defer connLock.Unlock()	
 	delete(allClients, incoming)
 	clientCount = len(allClients)
 	//fmt.Println("disconnected connection ...")
@@ -81,8 +81,8 @@ func removefromConnMap(incoming net.Conn) {
 } //removefromConnMap
 
 func addtoConnMap(incoming net.Conn) {
-	//connLock.Lock()
-	//defer connLock.Unlock()	
+	connLock.Lock()
+	defer connLock.Unlock()	
 	allClients[incoming] = clientCount+1
 	clientCount = len(allClients)
 	//fmt.Println("incoming connection ...")
