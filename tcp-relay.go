@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -37,14 +38,21 @@ func runtimeStats(portNum string) {
 func main() {
 	var err error
 
-	if len(os.Args) != 4 {
+	var rMax = flag.Int("r", 0, "number of reconnect attempts")
+	var rDelay = flag.Int("d", 10, "reconnect delay (in seconds)")
+
+	flag.Parse()
+
+	var args = flag.Args()
+
+	if len(args) != 3 {
 		fmt.Println("usage: tcp-relay-pub-vrs <hostname> <hostport> <relayport>")
 		os.Exit(1)
 	}
 
-	var hostName = os.Args[1]
-	var portNum = os.Args[2]
-	var outportNum = os.Args[3]
+	var hostName = args[0]
+	var portNum = args[1]
+	var outportNum = args[2]
 
 	// start relay listener
 	var server net.Listener
@@ -57,6 +65,8 @@ func main() {
 
 	// start stream client
 	var client = new(stream.StreamClient)
+	client.ReconnectMax = *rMax
+	client.ReconnectDelay = time.Duration(*rDelay) * time.Second
 	err = client.Connect(hostName, portNum)
 	if err != nil {
 		fmt.Printf("error starting client: %s\n", err)
@@ -88,6 +98,11 @@ func main() {
 }
 
 func dataSender(msgChan chan []byte) {
+	defer func() {
+		time.Sleep(time.Second)
+		os.Exit(1)
+	}()
+
 	var msg []byte
 	var ok bool
 

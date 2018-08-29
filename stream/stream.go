@@ -23,6 +23,7 @@
 package stream
 
 import (
+	"fmt"
 	"net"
 	"time"
 )
@@ -30,20 +31,32 @@ import (
 // StreamClient connects to a data stream and splits the stream into
 // JSON messages.
 type StreamClient struct {
+	// Reconnection options
+	ReconnectMax   int
+	ReconnectDelay time.Duration
+
 	// Err contains any error returned by the scanner
 	Err error
 
-	conn    net.Conn
+	addr       string
+	conn       net.Conn
+	reconCount int
+
 	scanner *scanner
+
+	msgChan chan []byte
+
+	closed bool
 }
 
 // Connect establishes a connection to the server.
 func (sc *StreamClient) Connect(server, port string) error {
 	var err error
 
+	sc.addr = net.JoinHostPort(server, port)
 	sc.conn, err = net.DialTimeout(
 		"tcp",
-		net.JoinHostPort(server, port),
+		sc.addr,
 		(30 * time.Second),
 	)
 	if err != nil {
@@ -56,6 +69,7 @@ func (sc *StreamClient) Connect(server, port string) error {
 // Close closes the network connection. An attempt is made to signal the
 // scanner to stop scanning at the end of the current message.
 func (sc *StreamClient) Close() {
+	sc.closed = true
 	sc.scanner.stop = true
 	time.Sleep(500 * time.Millisecond)
 	sc.conn.Close()
@@ -67,24 +81,65 @@ func (sc *StreamClient) Close() {
 // for the last error returned by the underlying stream scanner.
 func (sc *StreamClient) Scan(size int, discard bool) chan []byte {
 	sc.scanner = newStreamScanner(sc.conn, 5*1024*1024)
-	var ch = make(chan []byte, size)
-	go func() {
-		for sc.scanner.Scan() {
+	sc.msgChan = make(chan []byte, size)
+	go sc.scanAndWatch(discard)
+	return sc.msgChan
+}
+
+// scanAndWatch sends incoming messages to the message channel and
+// reconnects if an error occurs.
+func (sc *StreamClient) scanAndWatch(discard bool) {
+	var err error
+
+Exit:
+	for {
+		for sc.scanner.Scan() { // Scan() returns false on error
 			if sc.scanner.Bytes() == nil {
 				continue
 			}
 			select {
-			case ch <- append([]byte{}, sc.scanner.Bytes()...):
+			case sc.msgChan <- append([]byte{}, sc.scanner.Bytes()...):
 				continue
 			default:
 				if discard {
 					continue
 				}
-				ch <- append([]byte{}, sc.scanner.Bytes()...)
+				sc.msgChan <- append([]byte{}, sc.scanner.Bytes()...)
 			}
 		}
-		sc.Err = sc.scanner.Err()
-		close(ch)
-	}()
-	return ch
+		if sc.closed { // Close() was called on the client
+			return
+		}
+		sc.conn.Close() // close the existing connection
+		if sc.ReconnectMax > 0 {
+			if sc.ReconnectDelay == 0 {
+				sc.ReconnectDelay = time.Second
+			}
+			for {
+				time.Sleep(sc.ReconnectDelay)
+				fmt.Println("attempting to reconnect...")
+				sc.conn, err = net.DialTimeout(
+					"tcp",
+					sc.addr,
+					(30 * time.Second),
+				)
+				if err != nil {
+					if sc.reconCount >= sc.ReconnectMax {
+						fmt.Println("failed to reconnect")
+						break Exit
+					}
+					sc.reconCount++
+					continue
+				}
+				fmt.Println("reconnected")
+				sc.scanner = newStreamScanner(sc.conn, 5*1024*1024)
+				sc.reconCount = 0
+				break
+			}
+			continue
+		}
+		break
+	}
+	sc.Err = sc.scanner.Err()
+	close(sc.msgChan)
 }

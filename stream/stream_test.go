@@ -31,18 +31,20 @@ func TestStream(t *testing.T) {
 	var err error
 
 	var s = new(StreamClient)
-	err = s.Connect("pub-vrs.adsbexchange.com", "32030")
+	s.ReconnectMax = 3
+	err = s.Connect("localhost", "33099")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var ch = s.Scan(5, false)
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 100; i++ {
 		var msg []byte
-		msg = <-ch
-		if s.Err != nil {
+		var ok bool
+		msg, ok = <-ch
+		if !ok {
 			fmt.Printf("ERR: %s\n\n", s.Err)
-			continue
+			break
 		}
 		fmt.Printf("Len: %d\nBegin: %s\nEnd: %s\n", len(msg), msg[:10], msg[len(msg)-10:])
 		fmt.Printf("Queue: %d of %d\n\n", len(ch), cap(ch))
