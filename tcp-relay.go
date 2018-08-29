@@ -50,18 +50,16 @@ func sendDataToClients(msg string){
 	var wg sync.WaitGroup
 
 	for incoming, _ := range allClients {
-
 		wg.Add(1)
-
-		go func() {		
+		//go func() {		
 			_, err := incoming.Write([]byte(msg))
 			if err != nil {
 			fmt.Printf("Client %d (%s) disconnected \n", allClients[incoming], incoming.RemoteAddr().String())
 				go removefromConnMap(incoming)
 			}
 			fmt.Printf(".")
-			defer wg.Done()
-		}()
+		defer wg.Done()
+		//}()
 		
 	}
 	wg.Wait()
@@ -83,7 +81,7 @@ func removefromConnMap(incoming net.Conn) {
 func addtoConnMap(incoming net.Conn) {
 	connLock.Lock()
 	defer connLock.Unlock()	
-	allClients[incoming] = clientCount+1
+	allClients[incoming] = clientCount
 	clientCount = len(allClients)
 	//fmt.Println("incoming connection ...")
 } //addtoConnMap
