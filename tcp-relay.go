@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/adsbexchange/tcp-relay-pub-vrs/stream"
+	"github.com/cjkreklow/tcp-relay-pub-vrs/stream"
 	"github.com/dustin/go-humanize"
 )
 
