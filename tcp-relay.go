@@ -45,39 +45,25 @@ func sendDataToClients(msg string){
 
 	// VRS ADSBx specific since no newline is printed between data bursts
 	// we use ] and must add } closure
+	msg += "}"
 
 	//var wg sync.WaitGroup
-	//wg.Add(len(allClients))
 
-	//
-	msg += "}"
-		
-	
 	for incoming, _ := range allClients {
 
-		//defer wg.Done()
+		//wg.Add(1)
 
-		//connLock.RLock()
-		//defer connLock.RUnlock()
-				
-		//go func() {
-		
-			
-			//fmt.Println(msg)
-
-			go func(){
+		go func() {		
 			_, err := incoming.Write([]byte(msg))
 			if err != nil {
-				//fmt.Printf("Client %d (%s) disconnected \n", allClients[incoming], incoming.RemoteAddr().String())
-				
+			fmt.Printf("Client %d (%s) disconnected \n", allClients[incoming], incoming.RemoteAddr().String())
 				go removefromConnMap(incoming)
 			}
-			}()
-			//_, err := io.WriteString(incoming, msg)
-			//_, err := incoming.Write([]byte(msg))
-		//}()
+			fmt.Printf(".")
+			//defer wg.Done()
+		}()
+		
 	}
-	
 	//wg.Wait()
 	//fmt.Println(" ========= CALLING FREE OS MEMORY ========== ")
 	//debug.FreeOSMemory()
@@ -86,20 +72,20 @@ func sendDataToClients(msg string){
 
 func removefromConnMap(incoming net.Conn) {
 
-	connLock.Lock()
-	defer connLock.Unlock()	
+	//onnLock.Lock()
+	//defer connLock.Unlock()	
 	delete(allClients, incoming)
 	clientCount = len(allClients)
-	
+	//fmt.Println("disconnected connection ...")
+
 } //removefromConnMap
 
 func addtoConnMap(incoming net.Conn) {
-
-	connLock.Lock()
-	defer connLock.Unlock()	
+	//connLock.Lock()
+	//defer connLock.Unlock()	
 	allClients[incoming] = clientCount+1
 	clientCount = len(allClients)
-
+	//fmt.Println("incoming connection ...")
 } //addtoConnMap
 
 func handleTCPincoming(hostName string, portNum string) {
@@ -153,7 +139,7 @@ func main() {
 
 	//connect to TCP data for sending to clients
 	go handleTCPincoming(hostName, portNum)
-	go runtimeStats(portNum)
+	//go runtimeStats(portNum)
 
 	// print error on listener error
 	server, err := net.Listen("tcp", ":"+outportNum)
