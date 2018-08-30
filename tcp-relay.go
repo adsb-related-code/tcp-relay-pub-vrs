@@ -44,8 +44,8 @@ func sendDataToClient(client net.Conn, msg string) {
 	err := client.SetWriteDeadline(time.Now().Add(2 * time.Second))
 	if err != nil {
                 fmt.Printf("\n\nSetWriteDeadline failed: %v\n\n", err)
-		removeFromConnMap(client)
-		return
+		//removeFromConnMap(client)
+		//return
             }
 	n, err := client.Write([]byte(msg))
 	if err != nil {
