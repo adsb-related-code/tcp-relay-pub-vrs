@@ -12,7 +12,9 @@ import (
 	"runtime"
 	"sync"
 
+	//"github.com/dbudworth/greak"
 	"github.com/dustin/go-humanize"
+	"github.com/pkg/profile"
 )
 
 var clientCount = 0
@@ -21,26 +23,39 @@ var connLock sync.RWMutex
 
 func runtimeStats(portNum string) {
 	var m runtime.MemStats
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 	for {
 		runtime.ReadMemStats(&m)
 		fmt.Println()
 		fmt.Printf("Goroutines:\t%7d\t\t Clients:\t%7d\n", runtime.NumGoroutine(), clientCount)
-		fmt.Printf("Last GC:\t%7d\t\t Next GC:\t%7s\n", m.LastGC, humanize.Bytes(m.NextGC))
-		fmt.Printf("Memory Acq:\t%7s\t\t Heap Alloc:\t%7s\n", humanize.Bytes(m.HeapSys), humanize.Bytes(m.HeapAlloc))
-		fmt.Printf("GC Pool Mem:\t%7s\t\t Heap InUse:\t%7s\n", humanize.Bytes(m.HeapIdle-m.HeapReleased), humanize.Bytes(m.HeapInuse))
+		fmt.Printf("Last GC:%7d\t Next GC:\t%7s\n", m.LastGC, humanize.Bytes(m.NextGC))
+		fmt.Printf("Heap from OS:\t%7s\t\t Heap Alloc:\t%7s\n", humanize.Bytes(m.HeapSys), humanize.Bytes(m.HeapAlloc))
+		fmt.Printf("Free:\t%7d\t\t\t Heap Idle:\t%7s\n", m.Frees,humanize.Bytes(m.HeapIdle))
+		fmt.Printf("Mallocs:\t%7d\t\t Live (mallocs-free):\t%d\n", m.Mallocs, m.Mallocs-m.Frees)
+		fmt.Printf("Heap Released:\t%7s\t\t Heap InUse:\t%7s\n", humanize.Bytes(m.HeapReleased), humanize.Bytes(m.HeapInuse))
 		fmt.Println()
-		time.Sleep(5 * time.Second)
+		runtime.GC()
+		time.Sleep(60 * time.Second)
 	}
 }
 
 func sendDataToClient(client net.Conn, msg string) {
+
+	err := client.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	if err != nil {
+                fmt.Printf("\n\nSetWriteDeadline failed: %v\n\n", err)
+		removeFromConnMap(client)
+		return
+            }
 	n, err := client.Write([]byte(msg))
 	if err != nil {
 		log.Printf("Client %s disconnected \n", client.RemoteAddr().String())
 		removeFromConnMap(client)
+		
 	} else if n != len(msg) {
-		log.Printf("Client connection did not send expected number of bytes, %d != %d", n, len(msg))
+		log.Printf("Client connection did not accept expected number of bytes, %d != %d", n, len(msg))
+		removeFromConnMap(client)
+		
 	}
 }
 
@@ -58,15 +73,16 @@ func sendDataToClients(msg string) {
 
 func removeFromConnMap(client net.Conn) {
 	connLock.Lock()
-	log.Println("removing client", clientCount)
+	//log.Println("removing client", clientCount)
 	delete(allClients, client)
 	clientCount = len(allClients)
+	client.Close()
 	connLock.Unlock()
 }
 
 func addToConnMap(client net.Conn) {
 	connLock.Lock()
-	log.Println("adding client", clientCount+1)
+	//log.Println("adding client", clientCount+1)
 	allClients[client] = 0
 	clientCount = len(allClients)
 	connLock.Unlock()
@@ -112,6 +128,19 @@ func handleTCPOutgoing(outportNum string) {
 }
 
 func main() {
+
+	//defer profile.Start(profile.MemProfile).Stop()
+	defer profile.Start(profile.MemProfileRate(1024)).Stop()
+	
+	//base := greak.New()
+	//go func(){
+	//	for {
+	//	time.Sleep(60*time.Second)
+	//	after := base.Check()
+	//	fmt.Println("Sleeping goroutine should show here\n", after)
+	//	}
+	//}()
+
 	hostName := flag.String("hostname", "", "what host to connect to")
 	portNum := flag.String("port", "", "which port to connect with")
 	outportNum := flag.String("listenport", "", "which port to listen on")
