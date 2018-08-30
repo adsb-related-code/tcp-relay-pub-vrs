@@ -8,7 +8,7 @@ import (
 	"net"
 	"os"
 	"time"
-
+	"context"
 	"runtime"
 	"sync"
 
@@ -39,9 +39,20 @@ func runtimeStats(portNum string) {
 	}
 }
 
-func sendDataToClient(client net.Conn, msg string) {
+func sendDataToClient(client net.Conn, msg string, ctx context.Context) {
 
-	err := client.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	err := client.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	
+	select {
+    		case <-time.After(5 * time.Second):
+    		    	fmt.Println("EJECT!: Over 5 seconds in SendData - closing: ", client.RemoteAddr().String())
+			removeFromConnMap(client)
+			return
+    		case <-ctx.Done():
+			fmt.Println("On time: ",  client.RemoteAddr().String())
+    	}
+    	
+
 	if err != nil {
                 fmt.Printf("\n\nSetWriteDeadline failed: %v\n\n", err)
 		//removeFromConnMap(client)
@@ -64,9 +75,11 @@ func sendDataToClients(msg string) {
 	// we use ] and must add } closure
 	msg += "}"
 
+	ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
+
 	connLock.RLock()
 	for client := range allClients {
-		go sendDataToClient(client, msg)
+		go sendDataToClient(client, msg, ctx)
 	}
 	connLock.RUnlock()
 }
@@ -131,6 +144,8 @@ func main() {
 
 	//defer profile.Start(profile.MemProfile).Stop()
 	defer profile.Start(profile.MemProfileRate(1024)).Stop()
+
+	
 	
 	//base := greak.New()
 	//go func(){
