@@ -11,10 +11,11 @@ import (
 	"context"
 	"runtime"
 	"sync"
+	"strings"
 
 	//"github.com/dbudworth/greak"
 	"github.com/dustin/go-humanize"
-	"github.com/pkg/profile"
+	//"github.com/pkg/profile"
 )
 
 var clientCount = 0
@@ -31,7 +32,7 @@ func runtimeStats(portNum string) {
 		fmt.Printf("Last GC:%7d\t Next GC:\t%7s\n", m.LastGC, humanize.Bytes(m.NextGC))
 		fmt.Printf("Heap from OS:\t%7s\t\t Heap Alloc:\t%7s\n", humanize.Bytes(m.HeapSys), humanize.Bytes(m.HeapAlloc))
 		fmt.Printf("Free:\t%7d\t\t\t Heap Idle:\t%7s\n", m.Frees,humanize.Bytes(m.HeapIdle))
-		fmt.Printf("Mallocs:\t%7d\t\t Live (mallocs-free):\t%d\n", m.Mallocs, m.Mallocs-m.Frees)
+		fmt.Printf("Mallocs:\t%7d\t\t Live (m-f):\t%d\n", m.Mallocs, m.Mallocs-m.Frees)
 		fmt.Printf("Heap Released:\t%7s\t\t Heap InUse:\t%7s\n", humanize.Bytes(m.HeapReleased), humanize.Bytes(m.HeapInuse))
 		fmt.Println()
 		runtime.GC()
@@ -42,25 +43,26 @@ func runtimeStats(portNum string) {
 func sendDataToClient(client net.Conn, msg string, ctx context.Context) {
 
 	err := client.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	
-	select {
-    		case <-time.After(5 * time.Second):
-    		    	fmt.Println("EJECT!: Over 5 seconds in SendData - closing: ", client.RemoteAddr().String())
-			removeFromConnMap(client)
-			return
-    		case <-ctx.Done():
-			fmt.Println("On time: ",  client.RemoteAddr().String())
-    	}
-    	
-
 	if err != nil {
                 fmt.Printf("\n\nSetWriteDeadline failed: %v\n\n", err)
 		//removeFromConnMap(client)
 		//return
             }
+	
+	select {
+    		case <-time.After(5 * time.Second):
+    		    	fmt.Println("EJECTED!: ", client.RemoteAddr().String())
+			removeFromConnMap(client)
+			return
+    		case <-ctx.Done():
+			//fmt.Println("On time: ",  client.RemoteAddr().String())
+    	}
+    	
+
+	
 	n, err := client.Write([]byte(msg))
 	if err != nil {
-		log.Printf("Client %s disconnected \n", client.RemoteAddr().String())
+		log.Printf("Write ERR: Client will be %s disconnected \n", client.RemoteAddr().String())
 		removeFromConnMap(client)
 		
 	} else if n != len(msg) {
@@ -73,7 +75,8 @@ func sendDataToClient(client net.Conn, msg string, ctx context.Context) {
 func sendDataToClients(msg string) {
 	// VRS ADSBx specific since no newline is printed between data bursts
 	// we use ] and must add } closure
-	msg += "}"
+	msg += "}\r\n"
+	msg = strings.TrimLeft(msg, "}")
 
 	ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
 
@@ -81,7 +84,10 @@ func sendDataToClients(msg string) {
 	for client := range allClients {
 		go sendDataToClient(client, msg, ctx)
 	}
+	//clean up - is needed?
+	msg = ""
 	connLock.RUnlock()
+	
 }
 
 func removeFromConnMap(client net.Conn) {
@@ -134,7 +140,15 @@ func handleTCPOutgoing(outportNum string) {
 		if err != nil {
 			log.Println(err)
 		} else {
-			go addToConnMap(incoming)
+			/*_, err := incoming.Write([]byte("{\"init\":\"ADSBx\"}"))
+			if err != nil {
+				log.Printf("Initial accept disconn: %s \n", incoming.RemoteAddr().String())
+				removeFromConnMap(incoming)
+				
+			} else {*/
+				log.Printf("Initial conn: %s \n", incoming.RemoteAddr().String())	
+				go addToConnMap(incoming)
+			/*}*/
 		}
 
 	}
@@ -143,10 +157,8 @@ func handleTCPOutgoing(outportNum string) {
 func main() {
 
 	//defer profile.Start(profile.MemProfile).Stop()
-	defer profile.Start(profile.MemProfileRate(1024)).Stop()
+	//defer profile.Start(profile.MemProfileRate(1024)).Stop()
 
-	
-	
 	//base := greak.New()
 	//go func(){
 	//	for {
