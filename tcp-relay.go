@@ -76,7 +76,7 @@ func sendDataToClients(msg string) {
 	// VRS ADSBx specific since no newline is printed between data bursts
 	// we use ] and must add } closure
 	msg += "}\r\n"
-	//msg = strings.TrimLeft(msg, "}")
+	msg = strings.TrimLeft(msg, "}")
 
 	ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
 
@@ -127,7 +127,7 @@ func handleTCPIncoming(hostName string, portNum string) {
 		}
 	
 		// drop first { on every pass but first
-		if i == 1 { scan = scan[1:len(scan)] }
+		//if i == 1 { scan = scan[1:len(scan)] }
 
 		go sendDataToClients(scan)
 		i = 1
