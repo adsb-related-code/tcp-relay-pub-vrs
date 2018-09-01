@@ -127,6 +127,14 @@ func handleTCPIncoming(hostName string, portNum string) {
 			break
 		}
 	
+		
+		// trying to solve the problem of {["ac":{....}]}
+		// read ends up with {["ac":{....}]
+		// so we add } for closure
+		// but that means next burst starts with } from read
+		// so we need to drop the first }
+		// can we skip ahead with ReadString?
+		// Scanner did not seem to work even with custom split
 		// drop first { on every pass but first
 		//if i == 1 { scan = scan[1:len(scan)] }
 
