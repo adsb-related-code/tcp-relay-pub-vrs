@@ -121,6 +121,7 @@ func handleTCPIncoming(hostName string, portNum string) {
 		// read until ] then proceed
 		// loop forever reading TCP feed
 		// until err
+		
 		scan, err := data.ReadString(']')
 		if len(scan) == 0 || err != nil {
 			break
@@ -130,7 +131,7 @@ func handleTCPIncoming(hostName string, portNum string) {
 		//if i == 1 { scan = scan[1:len(scan)] }
 
 		go sendDataToClients(scan)
-		i = 1
+		//i = 1
 	}
 }
 
