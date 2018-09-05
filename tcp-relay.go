@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	//"bytes"
 	"flag"
 	"fmt"
 	"log"
@@ -17,6 +18,7 @@ import (
 	"github.com/dustin/go-humanize"
 	//"github.com/pkg/profile"
 )
+
 
 var clientCount = 0
 var allClients = make(map[net.Conn]int)
@@ -35,23 +37,31 @@ func runtimeStats(portNum string) {
 		fmt.Printf("Mallocs:\t%7d\t\t Live (m-f):\t%d\n", m.Mallocs, m.Mallocs-m.Frees)
 		fmt.Printf("Heap Released:\t%7s\t\t Heap InUse:\t%7s\n", humanize.Bytes(m.HeapReleased), humanize.Bytes(m.HeapInuse))
 		fmt.Println()
-		runtime.GC()
-		time.Sleep(60 * time.Second)
+		
+		time.Sleep(30 * time.Second)
 	}
+}
+
+func forceGC(){
+	//force garbage collection every 60 second
+	for {
+		time.Sleep(60 * time.Second)
+		runtime.GC()
+	}	
 }
 
 func sendDataToClient(client net.Conn, msg string, ctx context.Context) {
 
 	err := client.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	if err != nil {
-                fmt.Printf("\n\nSetWriteDeadline failed: %v\n\n", err)
+                //fmt.Printf("\n\nSetWriteDeadline failed: %v\n\n", err)
 		//removeFromConnMap(client)
 		//return
             }
 	
 	select {
     		case <-time.After(5 * time.Second):
-    		    	fmt.Println("EJECTED!: ", client.RemoteAddr().String())
+    		    	//fmt.Println("EJECTED!: ", client.RemoteAddr().String())
 			removeFromConnMap(client)
 			return
     		case <-ctx.Done():
@@ -62,11 +72,11 @@ func sendDataToClient(client net.Conn, msg string, ctx context.Context) {
 	
 	n, err := client.Write([]byte(msg))
 	if err != nil {
-		log.Printf("Write ERR: Client will be %s disconnected \n", client.RemoteAddr().String())
+		//log.Printf("Write ERR: Client will be %s disconnected \n", client.RemoteAddr().String())
 		removeFromConnMap(client)
 		
 	} else if n != len(msg) {
-		log.Printf("Client connection did not accept expected number of bytes, %d != %d", n, len(msg))
+		//log.Printf("Client connection did not accept expected number of bytes, %d != %d", n, len(msg))
 		removeFromConnMap(client)
 		
 	}
@@ -77,6 +87,7 @@ func sendDataToClients(msg string) {
 	// we use ] and must add } closure
 	msg += "}\r\n"
 	msg = strings.TrimLeft(msg, "}")
+
 
 	ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
 
@@ -117,25 +128,13 @@ func handleTCPIncoming(hostName string, portNum string) {
 
 	// constantly read JSON from PUB-VRS and write to the buffer
 	data := bufio.NewReader(conn)
+	//i := 0
 	for {
-		// read until ] then proceed
-		// loop forever reading TCP feed
-		// until err
-		
 		scan, err := data.ReadString(']')
 		if len(scan) == 0 || err != nil {
 			break
 		}
-	
 		
-		// trying to solve the problem of {["ac":{....}]}
-		// read ends up with {["ac":{....}]
-		// so we add } for closure
-		// but that means next burst starts with } from read
-		// so we need to drop the first }
-		// can we skip ahead with ReadString?
-		// Scanner did not seem to work even with custom split
-		// drop first { on every pass but first
 		//if i == 1 { scan = scan[1:len(scan)] }
 
 		go sendDataToClients(scan)
@@ -147,7 +146,7 @@ func handleTCPOutgoing(outportNum string) {
 	// print error on listener error
 	server, err := net.Listen("tcp", ":"+outportNum)
 	if err != nil {
-		log.Fatalf("Listener err: %s\n", err)
+		//log.Fatalf("Listener err: %s\n", err)
 	}
 
 	for {
@@ -162,7 +161,7 @@ func handleTCPOutgoing(outportNum string) {
 				removeFromConnMap(incoming)
 				
 			} else {*/
-				log.Printf("Initial conn: %s \n", incoming.RemoteAddr().String())	
+				//log.Printf("Initial conn: %s \n", incoming.RemoteAddr().String())	
 				go addToConnMap(incoming)
 			/*}*/
 		}
@@ -194,7 +193,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	go runtimeStats(*portNum)
+	//go runtimeStats(*portNum)
 	go handleTCPOutgoing(*outportNum)
 
 	// if this function returns, the main thread will exit, which exits the entire program
