@@ -10,7 +10,7 @@ import (
 	"net"
 	"os"
 	"runtime"
-	"strings"
+	//"strings"
 	"sync"
 	"time"
 
@@ -49,7 +49,7 @@ func forceGC() {
 	}
 }
 
-func sendDataToClient(client net.Conn, msg string, ctx context.Context) {
+func sendDataToClient(client net.Conn, msg []byte, ctx context.Context) {
 
 	err := client.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	if err != nil {
@@ -67,7 +67,7 @@ func sendDataToClient(client net.Conn, msg string, ctx context.Context) {
 		//fmt.Println("On time: ",  client.RemoteAddr().String())
 	}
 
-	n, err := client.Write([]byte(msg))
+	n, err := client.Write(msg)
 	if err != nil {
 		//log.Printf("Write ERR: Client will be %s disconnected \n", client.RemoteAddr().String())
 		removeFromConnMap(client)
@@ -79,11 +79,10 @@ func sendDataToClient(client net.Conn, msg string, ctx context.Context) {
 	}
 }
 
-func sendDataToClients(msg string) {
+func sendDataToClients(msg []byte) {
 	// VRS ADSBx specific since no newline is printed between data bursts
 	// we use ] and must add } closure
-	msg += "}\r\n"
-	msg = strings.TrimLeft(msg, "}")
+	msg = append(msg, []byte("}\r\n")...)
 
 	ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
 
@@ -91,8 +90,6 @@ func sendDataToClients(msg string) {
 	for client := range allClients {
 		go sendDataToClient(client, msg, ctx)
 	}
-	//clean up - is needed?
-	msg = ""
 	connLock.RUnlock()
 
 }
@@ -123,17 +120,23 @@ func handleTCPIncoming(hostName string, portNum string) {
 	defer conn.Close()
 
 	// constantly read JSON from PUB-VRS and write to the buffer
-	data := bufio.NewReader(conn)
+	data := bufio.NewReaderSize(conn, 5*1024*1024) // 5MB inbound read buffer, reused
 	//i := 0
 	for {
-		scan, err := data.ReadString(']')
+		scan, err := data.ReadSlice(']') // scan is a slice using the underlying read buffer array, not reallocated
 		if len(scan) == 0 || err != nil {
 			break
 		}
 
 		//if i == 1 { scan = scan[1:len(scan)] }
 
-		go sendDataToClients(scan)
+		if scan[0] == byte('}') { // trim the remaining close bracket
+			scan = scan[1:] // adjust the start of the slice one byte, still using the read buffer array
+		}
+		msg := make([]byte, len(scan), len(scan)+3) // create the message slice, allocating a new array of exactly the needed capacity
+		copy(msg, scan)                             // copy the bytes from the read buffer to the new slice
+
+		go sendDataToClients(msg)
 		//i = 1
 	}
 }
